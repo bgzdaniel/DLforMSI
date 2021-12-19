@@ -1,0 +1,12 @@
+*.ibd
+*.imzML
+.venv
+rescue.sh
+pyM2aiaDockerTest.ipynb
+pyM2aiaDockerTest.py
+pyM2aiaImageHelper.ipynb
+requirements.txt
+m2PeakPicking.txt
+*.pt
+training_data/
+*.h5
