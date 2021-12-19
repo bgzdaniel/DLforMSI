@@ -81,17 +81,19 @@ def load_data():
     data_std = np.std(data, 0)
     data /= (data_std + 1e-10)
     mz_array = np.array(f["mzArray"][:]).astype(np.float32)
-    return data, mz_array
+    xpos = np.array(f["xLocation"][:]).astype(np.float32)
+    ypos = np.array(f["yLocation"][:]).astype(np.float32)
+    return data, mz_array, xpos.astype(int), ypos.astype(int)
 
 if __name__ == '__main__':
-    data, _ = load_data()
+    data, mz_array, xpos, ypos = load_data()
     print(f"data shape: {data.shape}")
     intensity_count = data.shape[1]
     pixel_count = data.shape[0]
 
     model, optimizer, loss_function, device = init_model(intensity_count)
     total_loss = []
-    iterations = 500
+    iterations = 10
     batch_size = 128
     for i in range(iterations):
         idx = np.random.randint(pixel_count, size=(batch_size))
@@ -109,12 +111,18 @@ if __name__ == '__main__':
 
     plt.figure(1)
     plt.plot(np.convolve(total_loss, np.full((10), 0.1), mode="valid"))
-    plt.savefig("ae_h5_loss.png")
+    plt.savefig("prostate_loss.png")
 
-    # print("creating encoded image...")
-    # batch = torch.from_numpy(data).to(device)
-    # encoded = None
-    # with torch.no_grad():
-    #     encoded = model.encode(batch).cpu().numpy()
-    # im = sitk.GetImageFromArray(encoded)
-    # sitk.WriteImage(im, "prostate.nrrd")
+    x_size = (np.max(xpos) + 1).astype(int)
+    y_size = (np.max(ypos) + 1).astype(int)
+    print(f"x_size: {x_size}, y_size: {y_size}")
+    imgData = np.zeros((1, y_size, x_size, 5))
+
+    print("creating encoded image...")
+    batch = torch.from_numpy(data).to(device)
+    encoded = None
+    with torch.no_grad():
+        encoded = model.module.encode(batch).cpu().numpy()
+    imgData[0, ypos, xpos, :] = encoded
+    im = sitk.GetImageFromArray(imgData)
+    sitk.WriteImage(im, "prostate.nrrd")

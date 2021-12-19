@@ -1,6 +1,6 @@
 from ae_h5_train import *
 
-data, mz_array = load_data()
+data, mz_array, _, _ = load_data()
 pixel_count = data.shape[0]
 intensity_count = data.shape[1]
 model, optimizer, loss_function, device = init_model(intensity_count)

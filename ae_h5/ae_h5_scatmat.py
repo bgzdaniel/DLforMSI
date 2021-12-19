@@ -2,7 +2,7 @@ from ae_h5_train import *
 import seaborn as sns
 import pandas as pd
 
-data, _ = load_data()
+data, _, _, _ = load_data()
 pixel_count = data.shape[0]
 intensity_count = data.shape[1]
 model, optimizer, loss_function, device = init_model(intensity_count)
