@@ -7,11 +7,11 @@ intensity_count = data.shape[1]
 x_size = (np.max(xpos) + 1).astype(int)
 y_size = (np.max(ypos) + 1).astype(int)
 mz = 400
-lower = mz - 20
-higher = mz + 20
+lower = mz - 10
+higher = mz + 10
 idx = np.argwhere((mz_array >= lower) & (mz_array <= higher))
 im = np.sum(data[:, idx], 1)
-k = 4
+k = 3
 kmeans = KMeans(n_clusters=k, random_state=0).fit(im)
 labels = kmeans.labels_
 imgData = np.zeros((x_size, y_size))
@@ -21,4 +21,5 @@ plt.axis("off")
 plt.imshow(imgData, cmap=plt.cm.get_cmap('viridis', k))
 plt.clim(0, k)
 plt.colorbar()
+plt.title("400+-10 m/z")
 plt.savefig("prostate_kmeans.png")

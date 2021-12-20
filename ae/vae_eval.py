@@ -1,4 +1,4 @@
-from vae_train import *
+from ae.ae_train import *
 
 lib = CDLL('libM2aiaCoreIO.so')
 image = "ew_section1_pos.imzML"
