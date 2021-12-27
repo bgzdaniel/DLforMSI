@@ -115,7 +115,7 @@ if __name__ == '__main__':
 
     model, optimizer, loss_function, device = init_model(intensity_count)
     total_loss = []
-    iterations = 10
+    iterations = 1500
     batch_size = 128
     for i in range(iterations):
         idx = np.random.randint(pixel_count, size=(batch_size))

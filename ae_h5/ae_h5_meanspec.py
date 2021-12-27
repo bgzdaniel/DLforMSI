@@ -21,6 +21,9 @@ plt.figure(2)
 plt.plot(mz_array, input_mean, label="input mean")
 plt.plot(mz_array, rec_mean, label="rec mean")
 plt.plot(mz_array, diff, "r--", label="diff")
-plt.xlim(390, 410)
+mz = 600.0614
+lower = mz - 0.2
+higher = mz + 0.2
+plt.xlim(lower, higher)
 plt.legend()
 plt.savefig("prostate_meanspec_withmz.png")

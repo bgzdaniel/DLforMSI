@@ -8,12 +8,12 @@ pixel_count = data.shape[0]
 intensity_count = data.shape[1]
 
 # kmeans
-mz = 400
-lower = mz - 10
-higher = mz + 10
+mz = 738.4548
+lower = mz - 0.1
+higher = mz + 0.1
 ids = np.argwhere((mz_array >= lower) & (mz_array <= higher))
 im = np.sum(data[:, ids], 1)
-k = 3
+k = 4
 kmeans = KMeans(n_clusters=k, random_state=0).fit(im)
 labels = kmeans.labels_
 
