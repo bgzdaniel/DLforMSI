@@ -34,31 +34,53 @@ def finalize(existingAggregate):
         (mean, variance, sampleVariance) = (mean, M2 / count, M2 / (count - 1))
         return (mean, variance, sampleVariance)
 
+latent_size = 5
+
 # model definition
 class Vae(nn.Module):
-    def __init__(self, intensity_count, latent_size):
+    def __init__(self, intensity_count):
         super(Vae, self).__init__()
 
-        # encoder
-        self.enc1 = nn.Linear(intensity_count, intensity_count//8)
-        self.enc2 = nn.Linear(intensity_count//8, intensity_count//64)
-        self.enc3 = nn.Linear(intensity_count//64, latent_size)
+        self.activation = nn.ReLU()
 
-        # decoder
-        self.dec1 = nn.Linear(latent_size, intensity_count//64)
-        self.dec2 = nn.Linear(intensity_count//64, intensity_count//8)
-        self.dec3 = nn.Linear(intensity_count//8, intensity_count)
+        self.enc1_bn = nn.BatchNorm1d(512)
+        self.enc1 = nn.Linear(intensity_count, 512)
+        self.enc2_bn = nn.BatchNorm1d(5)
+        self.enc2 = nn.Linear(512, 5)
+
+        self.dec1_bn = nn.BatchNorm1d(512)
+        self.dec1 = nn.Linear(5, 512)
+        self.dec2_bn = nn.BatchNorm1d(intensity_count)
+        self.dec2 = nn.Linear(512, intensity_count)
+
+        # self.activation = nn.Tanh()
+
+        # self.enc1 = nn.Linear(intensity_count, intensity_count//16)
+        # self.enc2 = nn.Linear(intensity_count//16, intensity_count//256)
+        # self.enc3 = nn.Linear(intensity_count//256, latent_size)
+
+        # self.dec1 = nn.Linear(latent_size, intensity_count//256)
+        # self.dec2 = nn.Linear(intensity_count//256, intensity_count//16)
+        # self.dec3 = nn.Linear(intensity_count//16, intensity_count)
 
     def encode(self, x):
-        x = torch.tanh(self.enc1(x))
-        x = torch.tanh(self.enc2(x))
-        x = self.enc3(x)
+        x = self.activation(self.enc1_bn(self.enc1(x)))
+        x = self.activation(self.enc2_bn(self.enc2(x)))
+
+        # x = self.activation(self.enc1(x))
+        # x = self.activation(self.enc2(x))
+        # x = self.enc3(x)
+
         return x
 
     def decode(self, x):
-        x = torch.tanh(self.dec1(x))
-        x = torch.tanh(self.dec2(x))
-        x = self.dec3(x)
+        x = self.activation(self.dec1_bn(self.dec1(x)))
+        x = self.activation(self.dec2_bn(self.dec2(x)))
+
+        # x = self.activation(self.dec1(x))
+        # x = self.activation(self.dec2(x))
+        # x = self.dec3(x)
+
         return x
 
     def forward(self, x):
@@ -78,16 +100,16 @@ def train(batch):
     return loss
 
 # model initialization
-def initialize_model(intensity_count, latent_size):
+def init_model(intensity_count):
     print(f"torch cuda version: {torch.version.cuda}")
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Used device: {device}")
-    model = Vae(intensity_count, latent_size)
+    model = Vae(intensity_count)
     if torch.cuda.device_count() > 1:
         print(torch.cuda.device_count(), "GPUs")
         model = nn.DataParallel(model)
     model.to(device)
-    model_params = Path("/home/dbogacz/Development/pyM2aia/tests/model_params.pt")
+    model_params = Path("model_params.pt")
     print(f"model_params already exist? {model_params.is_file()}")
     if model_params.is_file():
         print(f"loading model_params...")
@@ -99,7 +121,7 @@ def initialize_model(intensity_count, latent_size):
 
 
 lib = CDLL('libM2aiaCoreIO.so')
-image = "../training_data/ew_section3_pos.imzML"
+image = "/home/dbogacz/Development/pyM2aia/tests/training_data/ew_section2_pos.imzML"
 params = "../m2PeakPicking.txt"
 
 if __name__ == '__main__':
@@ -113,12 +135,11 @@ if __name__ == '__main__':
         A = sitk.GetArrayFromImage(I)
         x_size = A.shape[1]
         y_size = A.shape[2]
-        print(A.shape)
+        print(f"worm shape: {A.shape}")
         print(intensity_count)
 
         # initialize model
-        latent_size = 16
-        model, optimizer, loss_function, device = initialize_model(intensity_count, latent_size)
+        model, optimizer, loss_function, device = init_model(intensity_count)
 
         # calculate mean and variance
         aggregate = [0, np.zeros((intensity_count)), np.zeros((intensity_count))]
@@ -130,14 +151,12 @@ if __name__ == '__main__':
         im_stddev = np.sqrt(im_sampleVariance)
 
         # training
-        iterations = 1000
+        iterations = 4000
         total_loss = []
-        kld_loss = []
-        rec_loss = []
-        batch_iter = helper.SpectrumRandomBatchIterator(512)
+        batch_iter = helper.SpectrumRandomBatchIterator(32)
         for i in range(iterations):
             batch = next(batch_iter)
-            batch -= im_mean # data zero centering
+            # batch -= im_mean # data zero centering
             batch /= (im_stddev + 1e-10) # data normalization
             batch = torch.from_numpy(batch).to(device)
             loss = train(batch)
@@ -149,27 +168,69 @@ if __name__ == '__main__':
                 print(f"{i:6d}: loss: {loss.item():3.4f}")
         
         # save learned model parameters
-        torch.save(model.state_dict(), "/home/dbogacz/Development/pyM2aia/tests/model_params.pt")
+        torch.save(model.state_dict(), "model_params.pt")
+
+        pixel_count = x_size * y_size
+        data = np.zeros((pixel_count, intensity_count))
+        mz_array = np.zeros(intensity_count)
+        xpos = np.zeros(pixel_count)
+        ypos = np.zeros(pixel_count)
+        gen = helper.SpectrumIterator()
+        xs = None
+        for pixel in gen:
+            id, xs, ys = pixel
+            y, x, z = helper.GetPixelPosition(id)
+            data[id, :] = ys
+            xpos[id] = x
+            ypos[id] = y
+        mz_array = xs
+        data = data.astype(np.float32)
+        mz_array = mz_array.astype(np.float32)
+        xpos = xpos.astype(int)
+        ypos = ypos.astype(int)
+        # data_mean = np.mean(data, 0)
+        # data -= data_mean
+        data_std = np.std(data, 0)
+        data /= (data_std + 1e-10)
 
         # save encoded image to .nrrd file
         print(f"saving .nrrd image...")
         imgData = np.zeros((1, x_size, y_size, latent_size))
-        gen = helper.SpectrumIterator()
-        for data in gen:
-            id, xs, ys = data
-            x, y, z = helper.GetPixelPosition(id)
-            ys -= im_mean # data zero centering
-            ys /= (im_stddev + 1e-10) # data normalization
-            ys = torch.unsqueeze(torch.from_numpy(ys).to(device), 0)
-            with torch.no_grad():
-                latent_vector = model.module.encode(ys)
-            imgData[z, y, x, :] = latent_vector.cpu().numpy()
+        print("creating encoded image...")
+        batch = torch.from_numpy(data).to(device)
+        encoded = None
+        with torch.no_grad():
+            encoded = model.module.encode(batch).cpu().numpy()
+        imgData[0, xpos, ypos, :] = encoded
         im = sitk.GetImageFromArray(imgData)
-        sitk.WriteImage(im, "/home/dbogacz/Development/pyM2aia/tests/worm_section3.nrrd")
+        sitk.WriteImage(im, "worm.nrrd")
+
+        imgData = np.squeeze(imgData, 0)
+        img_list = []
+        for i in range(latent_size):
+            img_list.append(imgData[:, :, i])
+        if(latent_size == 5):
+            plt.figure(1, figsize=(20, 4))
+            for i in range(latent_size):
+                plt.subplot(1, latent_size, i+1)
+                plt.imshow(img_list[i], interpolation="none")
+                plt.title("dim" + str(i+1))
+                plt.axis("off")
+                plt.colorbar()
+            plt.savefig("worm_encoding.png")
+        else:
+            plt.figure(1, figsize=(17, 17))
+            for i in range(latent_size):
+                plt.subplot(4, 4, i+1)
+                plt.imshow(img_list[i], interpolation="none")
+                plt.title("dim" + str(i+1))
+                plt.axis("off")
+                plt.colorbar()
+            plt.savefig("worm_encoding.png")
 
         # plot loss
         array = np.array(total_loss)
         array = np.convolve(array, np.full((10), 0.1), "valid")
-        plt.figure(1)
+        plt.figure(2)
         plt.plot(array)
-        plt.savefig('vae_training_loss.png')
+        plt.savefig("worm_loss.png")

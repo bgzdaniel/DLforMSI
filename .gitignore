@@ -10,3 +10,4 @@ m2PeakPicking.txt
 *.pt
 training_data/
 *.h5
+__pycache__
