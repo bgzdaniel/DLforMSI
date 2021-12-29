@@ -7,8 +7,9 @@ lib = CDLL('libM2aiaCoreIO.so')
 image = "/home/dbogacz/Development/pyM2aia/tests/training_data/ew_section2_pos.imzML"
 params = "../m2PeakPicking.txt"
 
-def get_shape():
+def load_data():
     with M2aiaImageHelper(lib, image, params) as helper:
+        # get shape of data
         gen = helper.SpectrumIterator()
         pixel = next(gen)[2]
         intensity_count = len(pixel)
@@ -16,16 +17,13 @@ def get_shape():
         A = sitk.GetArrayFromImage(I)
         x_size = A.shape[1]
         y_size = A.shape[2]
-        return x_size, y_size, intensity_count
 
-def load_data():
-    x_size, y_size, intensity_count = get_shape()
-    pixel_count = x_size * y_size
-    data = np.zeros((pixel_count, intensity_count))
-    mz_array = np.zeros(intensity_count)
-    xpos = np.zeros(pixel_count)
-    ypos = np.zeros(pixel_count)
-    with M2aiaImageHelper(lib, image, params) as helper:
+        # get data
+        pixel_count = x_size * y_size
+        data = np.zeros((pixel_count, intensity_count))
+        mz_array = np.zeros(intensity_count)
+        xpos = np.zeros(pixel_count)
+        ypos = np.zeros(pixel_count)
         gen = helper.SpectrumIterator()
         xs = None
         for pixel in gen:
@@ -39,9 +37,9 @@ def load_data():
         mz_array = mz_array.astype(np.float32)
         xpos = xpos.astype(int)
         ypos = ypos.astype(int)
-    # data_mean = np.mean(data, 0)
-    # data -= data_mean
-    data_std = np.std(data, 0)
-    data /= (data_std + 1e-10)
-    return data, mz_array, xpos, ypos
+        # data_mean = np.mean(data, 0)
+        # data -= data_mean
+        data_std = np.std(data, 0)
+        data /= (data_std + 1e-10)
+        return data, mz_array, xpos, ypos
 
