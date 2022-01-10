@@ -37,9 +37,9 @@ def load_data():
         mz_array = mz_array.astype(np.float32)
         xpos = xpos.astype(int)
         ypos = ypos.astype(int)
-        # data_mean = np.mean(data, 0)
-        # data -= data_mean
+        data_mean = np.mean(data, 0)
         data_std = np.std(data, 0)
+        data -= data_mean
         data /= (data_std + 1e-10)
         return data, mz_array, xpos, ypos
 

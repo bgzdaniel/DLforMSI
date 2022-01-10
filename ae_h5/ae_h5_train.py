@@ -98,11 +98,9 @@ def load_data():
     f =  h5py.File("../training_data/msiPL_Dataset/Prostate/P_1900.h5", "r")
     print(f.keys())
     data = np.transpose(np.array(f["Data"][:])).astype(np.float32)
-    tic = np.sum(data, axis=-1)
-    data = data / tic[:, None]
-    # data_mean = np.mean(data, 0)
-    # data -= data_mean
+    data_mean = np.mean(data, 0)
     data_std = np.std(data, 0)
+    data -= data_mean
     data /= (data_std + 1e-10)
     mz_array = np.array(f["mzArray"][:]).astype(np.float32)
     xpos = np.array(f["xLocation"][:]).astype(np.float32)
@@ -117,7 +115,7 @@ if __name__ == '__main__':
 
     model, optimizer, loss_function, device = init_model(intensity_count)
     total_loss = []
-    iterations = 2500
+    iterations = 750
     batch_size = 32
     for i in range(iterations):
         idx = np.random.randint(pixel_count, size=(batch_size))

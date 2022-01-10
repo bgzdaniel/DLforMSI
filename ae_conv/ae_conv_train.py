@@ -46,20 +46,20 @@ class ConvAE(nn.Module):
         self.pool = nn.MaxPool1d(2)
         
         # encoding
-        self.conv2 = nn.Conv1d(4, 16, 3, padding="same")
-        self.conv1 = nn.Conv1d(1, 4, 3, padding="same")
-        self.conv3 = nn.Conv1d(16, 64, 3, padding="same")
-        self.conv4 = nn.Conv1d(64, 256, 3, padding="same")
-        self.conv5 = nn.Conv1d(256, 1024, 3, padding="same")
-        self.enc1 = nn.Linear(1024*(intensity_count//(2**5)), latent_size)
+        self.conv1 = nn.Conv1d(1, 2, 3, padding="same")
+        self.conv2 = nn.Conv1d(2, 4, 3, padding="same")
+        self.conv3 = nn.Conv1d(4, 8, 3, padding="same")
+        self.conv4 = nn.Conv1d(8, 16, 3, padding="same")
+        self.conv5 = nn.Conv1d(16, 32, 3, padding="same")
+        self.enc1 = nn.Linear(32*(intensity_count//(2**5)), latent_size)
         
         # decoding
-        self.dec1 = nn.Linear(latent_size, 1024*(intensity_count//(2**5)))
-        self.deconv1 = nn.ConvTranspose1d(1024, 256, 2, stride=2)
-        self.deconv2 = nn.ConvTranspose1d(256, 64, 2, stride=2)
-        self.deconv3 = nn.ConvTranspose1d(64, 16, 2, stride=2)
-        self.deconv4 = nn.ConvTranspose1d(16, 4, 2, stride=2)
-        self.deconv5 = nn.ConvTranspose1d(4, 1, 2, stride=2)
+        self.dec1 = nn.Linear(latent_size, 32*(intensity_count//(2**5)))
+        self.deconv1 = nn.ConvTranspose1d(32, 16, 2, stride=2)
+        self.deconv2 = nn.ConvTranspose1d(16, 8, 2, stride=2)
+        self.deconv3 = nn.ConvTranspose1d(8, 4, 2, stride=2)
+        self.deconv4 = nn.ConvTranspose1d(4, 2, 2, stride=2)
+        self.deconv5 = nn.ConvTranspose1d(2, 1, 2, stride=2)
 
     def encode(self, x):
         x = self.pool(torch.tanh(self.conv1(x)))
@@ -73,7 +73,7 @@ class ConvAE(nn.Module):
 
     def decode(self, x):
         x = torch.tanh(self.dec1(x))
-        x = x.view(-1, 1024, (self.intensity_count//(2**5)))
+        x = x.view(-1, 32, (self.intensity_count//(2**5)))
         x = torch.tanh(self.deconv1(x))
         x = torch.tanh(self.deconv2(x))
         x = torch.tanh(self.deconv3(x))
