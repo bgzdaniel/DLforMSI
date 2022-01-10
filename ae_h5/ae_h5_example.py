@@ -26,28 +26,37 @@ with torch.no_grad():
 im3 = get_plot_image(738.4548, 0.1)
 im4 = get_plot_image(600.0614, 0.15)
 
+lower = 0
+higher = 0
+if latent_size == 16:
+    lower = -4
+    higher = 4
+else:
+    lower = 0
+    higher = 8
+
 plt.figure(figsize=(10,10))
 plt.subplot(2, 2, 1)
 plt.imshow(im1)
-plt.clim(-4, 4)
+plt.clim(lower, higher)
 plt.axis("off")
 plt.title("original data, 738.4548+-0.1 m/z")
 plt.colorbar()
 plt.subplot(2, 2, 2)
 plt.imshow(im2)
-plt.clim(-4, 4)
+plt.clim(lower, higher)
 plt.axis("off")
 plt.title("original data, 600.0614+-0.15 m/z")
 plt.colorbar()
 plt.subplot(2, 2, 3)
 plt.imshow(im3)
-plt.clim(-4, 4)
+plt.clim(lower, higher)
 plt.axis("off")
 plt.title("network prediction, 738.4548+-0.1 m/z")
 plt.colorbar()
 plt.subplot(2, 2, 4)
 plt.imshow(im4)
-plt.clim(-4, 4)
+plt.clim(lower, higher)
 plt.axis("off")
 plt.title("network prediction, 600.0614+-0.15 m/z")
 plt.colorbar()

@@ -96,6 +96,8 @@ def load_data():
     f =  h5py.File("../training_data/msiPL_Dataset/Prostate/P_1900.h5", "r")
     print(f.keys())
     data = np.transpose(np.array(f["Data"][:])).astype(np.float32)
+    tic = np.sum(data, axis=-1)
+    data = data / tic[:, None]
     data_mean = np.mean(data, 0)
     data -= data_mean
     data_std = np.std(data, 0)
