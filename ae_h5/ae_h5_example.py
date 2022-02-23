@@ -18,6 +18,9 @@ def get_plot_image(mz, bound):
 im1 = get_plot_image(738.4548, 0.1)
 im2 = get_plot_image(600.0614, 0.15)
 
+im1_top = np.max(im1) * 0.65
+im2_top = np.max(im2) * 0.65
+
 model, optimizer, loss_function, device = init_model(intensity_count)
 batch = torch.from_numpy(data).to(device)
 with torch.no_grad():
@@ -26,37 +29,31 @@ with torch.no_grad():
 im3 = get_plot_image(738.4548, 0.1)
 im4 = get_plot_image(600.0614, 0.15)
 
-lower = 0
-higher = 0
-if latent_size == 16:
-    lower = -4
-    higher = 4
-else:
-    lower = 0
-    higher = 8
-
 plt.figure(figsize=(10,10))
 plt.subplot(2, 2, 1)
 plt.imshow(im1)
-plt.clim(lower, higher)
+plt.clim(0, im1_top)
 plt.axis("off")
 plt.title("original data, 738.4548+-0.1 m/z")
 plt.colorbar()
+
 plt.subplot(2, 2, 2)
 plt.imshow(im2)
-plt.clim(lower, higher)
+plt.clim(0, im2_top)
 plt.axis("off")
 plt.title("original data, 600.0614+-0.15 m/z")
 plt.colorbar()
+
 plt.subplot(2, 2, 3)
 plt.imshow(im3)
-plt.clim(lower, higher)
+plt.clim(0, im1_top)
 plt.axis("off")
 plt.title("network prediction, 738.4548+-0.1 m/z")
 plt.colorbar()
+
 plt.subplot(2, 2, 4)
 plt.imshow(im4)
-plt.clim(lower, higher)
+plt.clim(0, im2_top)
 plt.axis("off")
 plt.title("network prediction, 600.0614+-0.15 m/z")
 plt.colorbar()

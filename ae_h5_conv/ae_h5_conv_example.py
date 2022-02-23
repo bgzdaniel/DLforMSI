@@ -19,6 +19,9 @@ def get_plot_image(mz, bound):
 im1 = get_plot_image(738.4548, 0.1)
 im2 = get_plot_image(600.0614, 0.15)
 
+im1_top = np.max(im1) * 0.65
+im2_top = np.max(im2) * 0.65
+
 model, optimizer, loss_function, device = init_model(padded_count)
 out_data = torch.zeros(pixel_count, padded_count)
 for i in range(0, pixel_count):
@@ -35,25 +38,28 @@ im4 = get_plot_image(600.0614, 0.15)
 plt.figure(figsize=(10,10))
 plt.subplot(2, 2, 1)
 plt.imshow(im1)
-plt.clim(-4, 4)
+plt.clim(0, im1_top)
 plt.axis("off")
 plt.title("original data, 738.4548+-0.1 m/z")
 plt.colorbar()
+
 plt.subplot(2, 2, 2)
 plt.imshow(im2)
-plt.clim(-4, 4)
+plt.clim(0, im2_top)
 plt.axis("off")
 plt.title("original data, 600.0614+-0.15 m/z")
 plt.colorbar()
+
 plt.subplot(2, 2, 3)
 plt.imshow(im3)
-plt.clim(-4, 4)
+plt.clim(0, im1_top)
 plt.axis("off")
 plt.title("network prediction, 738.4548+-0.1 m/z")
 plt.colorbar()
+
 plt.subplot(2, 2, 4)
 plt.imshow(im4)
-plt.clim(-4, 4)
+plt.clim(0, im2_top)
 plt.axis("off")
 plt.title("network prediction, 600.0614+-0.15 m/z")
 plt.colorbar()

@@ -37,9 +37,14 @@ def load_data():
         mz_array = mz_array.astype(np.float32)
         xpos = xpos.astype(int)
         ypos = ypos.astype(int)
-        data_mean = np.mean(data, 0)
-        data_std = np.std(data, 0)
-        data -= data_mean
-        data /= (data_std + 1e-10)
+        tic = np.sum(data, 1)
+        tic /= 1e4
+        tic[tic == 0] = 1e-10
+        data_mean = np.mean(data, 1)
+        data -= data_mean[:, None]
+        data /= tic[:, None]
+        print(data.shape)
         return data, mz_array, xpos, ypos
 
+if __name__ == '__main__':
+    load_data()

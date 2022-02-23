@@ -2,50 +2,59 @@ from ae_h5_conv_train import *
 import seaborn as sns
 import pandas as pd
 from sklearn.mixture import GaussianMixture
+from matplotlib import colors
 
 data, mz_array, xpos, ypos = load_data()
 pixel_count = data.shape[0]
 intensity_count = data.shape[1]
 padded_count = 64000
-
-# gaussian mixture
+model, optimizer, loss_function, device = init_model(padded_count)
 x_size = (np.max(xpos) + 1).astype(int)
 y_size = (np.max(ypos) + 1).astype(int)
-mz = 738.4548
-lower = mz - 0.1
-higher = mz + 0.1
-idx = np.argwhere((mz_array >= lower) & (mz_array <= higher))
-im = np.sum(data[:, idx], 1)
-k = 4
-labels = GaussianMixture(n_components=k, random_state=0).fit_predict(im)
+
+palette = "tab10"
+colormap = [plt.cm.get_cmap(palette)(i) for i in range(0, 7)]
+cmap = colors.ListedColormap(colormap)
+
+# guassian mixture
+batch = torch.from_numpy(data).to(device)
+encoded = None
+with torch.no_grad():
+    batch = F.pad(batch, (0, (padded_count-intensity_count)), "constant", 0)
+    batch = torch.unsqueeze(batch, 1)
+    encoded = model.module.encode(batch).cpu().numpy()
+k = 6
+labels = GaussianMixture(n_components=k, random_state=0).fit_predict(encoded)
 imgData = np.zeros((x_size, y_size))
+labels += 1
 imgData[xpos, ypos] = labels
 plt.figure()
 plt.axis("off")
-plt.imshow(imgData, cmap=plt.cm.get_cmap('viridis', k))
-plt.clim(0, k)
-plt.colorbar()
-plt.title(f"{mz}+-0.1 m/z")
+plt.imshow(imgData, cmap=cmap)
+plt.clim(0, k+1)
+ticks = [i for i in range(k+1)]
+plt.colorbar(ticks=ticks)
+plt.title(f"Gaussian Mixture of Encoded Features")
 plt.savefig("prostate_gaussian_mixture.png")
 
+colormap = [plt.cm.get_cmap(palette)(i) for i in range(1, 7)]
+
 # scatmat
-size = 128
-model, optimizer, loss_function, device = init_model(padded_count)
-encoding_list = []
-for i in range(20):
-    idx = np.random.randint(pixel_count, size=(size))
-    batch = torch.from_numpy(data[idx, :]).to(device)
+size = 2000
+idx = np.random.randint(pixel_count, size=(size))
+labels = labels[idx].tolist()
+batch = torch.from_numpy(data[idx, :]).to(device)
+encoding = None
+with torch.no_grad():
     batch = F.pad(batch, (0, (padded_count-intensity_count)), "constant", 0)
     batch = torch.unsqueeze(batch, 1)
-    with torch.no_grad():
-        encoding_list.append(np.insert(model.module.encode(batch).cpu().numpy(), latent_size, labels[idx], axis=1))
-encoding = encoding_list[0]
-for i in range(1, len(encoding_list)):
-    encoding = np.concatenate((encoding, encoding_list[i]), axis=0)
+    encoding = model.module.encode(batch).cpu().numpy().tolist()
+for i in range(size):
+    encoding[i].append(labels[i])
 dataset = encoding
 columns = ["dim" + str(i+1) for i in range(latent_size)]
 columns.append("label")
 df = pd.DataFrame(dataset, columns = columns)
-plot = sns.pairplot(df, hue="label", palette="viridis")
+plot = sns.pairplot(df, hue="label", palette=colormap)
 fig = plot.fig
 fig.savefig("prostate_scatmat.png")

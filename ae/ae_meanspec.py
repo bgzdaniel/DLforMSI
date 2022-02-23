@@ -13,9 +13,11 @@ with torch.no_grad():
 rec_mean = np.mean(rec, 0)
 diff = np.sqrt(np.power(rec_mean - input_mean, 2))
 plt.figure(1)
-plt.plot(input_mean[::100], label="input mean")
-plt.plot(rec_mean[::100], label="rec mean")
-plt.plot(diff[::100], "r--", label="diff")
+plt.plot(mz_array, input_mean, label="input mean")
+plt.plot(mz_array, rec_mean, label="rec mean")
+plt.plot(mz_array, diff, "r--", label="diff")
+plt.xlabel("m/z")
+plt.ylabel("intensity")
 plt.legend()
 plt.savefig("worm_meanspec.png")
 plt.figure(2)
@@ -26,5 +28,8 @@ mz = 262.177
 lower = mz - 0.2
 higher = mz + 0.2
 plt.xlim(lower, higher)
+plt.ylim(0, 0.2)
+plt.xlabel("m/z")
+plt.ylabel("intensity")
 plt.legend()
 plt.savefig("worm_meanspec_withmz.png")

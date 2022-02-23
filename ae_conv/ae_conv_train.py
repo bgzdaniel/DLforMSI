@@ -1,4 +1,3 @@
-from pyM2aia import M2aiaImageHelper
 from ctypes import CDLL
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,30 +7,9 @@ from torch import optim
 import SimpleITK as sitk
 from pathlib import Path
 import torch.nn.functional as F
+import time
 
-# Welford's online algorithm for calculating mean and variance
-
-# For a new value newValue, compute the new count, new mean, the new M2.
-# mean accumulates the mean of the entire dataset
-# M2 aggregates the squared distance from the mean
-# count aggregates the number of samples seen so far
-def update(existingAggregate, newValue):
-    (count, mean, M2) = existingAggregate
-    count += 1
-    delta = newValue - mean
-    mean += delta / count
-    delta2 = newValue - mean
-    M2 += delta * delta2
-    return (count, mean, M2)
-
-# Retrieve the mean, variance and sample variance from an aggregate
-def finalize(existingAggregate):
-    (count, mean, M2) = existingAggregate
-    if count < 2:
-        return float("nan")
-    else:
-        (mean, variance, sampleVariance) = (mean, M2 / count, M2 / (count - 1))
-        return (mean, variance, sampleVariance)
+from load_data import *
 
 latent_size = 16
 
@@ -117,87 +95,70 @@ def init_model(latent_size):
     loss_function = nn.MSELoss()
     return model, optimizer, loss_function, device
 
-lib = CDLL('libM2aiaCoreIO.so')
-image = "/home/dbogacz/Development/pyM2aia/tests/training_data/ew_section2_pos.imzML"
-params = "../m2PeakPicking.txt"
-
 if __name__ == '__main__':
-    with M2aiaImageHelper(lib, image, params) as helper:
-        gen = helper.SpectrumIterator()
-        pixel = next(gen)[2]
-        intensity_count = len(pixel)
-        I = helper.GetImage(1088.868, 0.249, np.float32)
-        A = sitk.GetArrayFromImage(I)
-        x_size = A.shape[1]
-        y_size = A.shape[2]
-        print(A.shape)
-        print(I.GetSize())
-        print(intensity_count)
+    start = time.time()
+    data, mz_array, xpos, ypos = load_data()
+    print(f"data shape: {data.shape}")
+    intensity_count = data.shape[1]
+    padded_count = 32000
+    pixel_count = data.shape[0]
 
-        aggregate = [0, np.zeros((intensity_count)), np.zeros((intensity_count))]
-        gen = helper.SpectrumIterator()
-        for data in gen:
-            i, xs, ys = data
-            aggregate = update(aggregate, ys)
-        im_mean, im_variance, im_sampleVariance = finalize(aggregate)
-        im_stddev = np.sqrt(im_sampleVariance)
-
-        # initialize model
-        padded_count = 32000
-        model, optimizer, loss_function, device = init_model(padded_count)
+    model, optimizer, loss_function, device = init_model(padded_count)
+    total_loss = []
+    iterations = 40000
+    batch_size = 32
+    for i in range(iterations):
+        idx = np.random.randint(pixel_count, size=(batch_size))
+        batch = torch.from_numpy(data[idx, :]).to(device)
+        batch = F.pad(batch, (0, (padded_count-intensity_count)), "constant", 0)
+        batch = torch.unsqueeze(batch, 1)
+        loss = train(batch)
         
-        # training
-        iterations = 2000
-        total_loss = []
-        batch_iter = helper.SpectrumRandomBatchIterator(64)
-        for i in range(iterations):
-            batch = next(batch_iter)
-            batch -= im_mean # data zero centering
-            batch /= (im_stddev + 1e-10) # data normalization
-            batch = torch.unsqueeze(torch.from_numpy(batch).to(device), 1)
-            batch = F.pad(batch, (0, padded_count-intensity_count), "constant", 0)
-            loss = train(batch)
-            total_loss.append(loss.item())
+        # visualization
+        total_loss.append(loss.item())
 
-            if i % (iterations//10) == 0:
-                print(f"{i:6d}: loss: {loss.item():3.4f}")
-        
-        # save learned model parameters
-        torch.save(model.state_dict(), "model_params.pt")
+        if i % (iterations//10) == 0:
+            print(f"{i:6d}: loss: {loss.item():3.10f}")
 
-        # saving image
-        print("creating .nrrd file...")
-        imgData = np.zeros((1, x_size, y_size, latent_size))
-        gen = helper.SpectrumIterator()
-        for data in gen:
-            id, xs, ys = data
-            x, y, z = helper.GetPixelPosition(id)
-            ys -= im_mean # data zero centering
-            ys /= (im_stddev + 1e-10) # data normalization
-            ys = torch.unsqueeze(torch.unsqueeze(torch.from_numpy(ys).to(device), 0), 0)
-            ys = F.pad(ys, (0, padded_count-intensity_count), "constant", 0)
-            with torch.no_grad():
-                latent_vector = model.module.encode(ys)
-            imgData[z, y, x, :] = latent_vector.cpu().numpy()
-        im = sitk.GetImageFromArray(imgData)
-        sitk.WriteImage(im, "worm.nrrd")
+    print("saving model params...")
+    torch.save(model.state_dict(), "model_params.pt")
 
-        array = np.array(total_loss)
-        array = np.convolve(array, np.full((10), 0.1), "valid")
-        plt.figure(1)
-        plt.plot(array)
-        plt.savefig('worm_loss.png')
+    plt.figure(1)
+    plt.plot(np.convolve(total_loss, np.full((10), 0.1), mode="valid"))
+    plt.xlabel("iteration")
+    plt.ylabel("loss")
+    plt.savefig("worm_loss.png")
 
-        imgData = np.squeeze(imgData, 0)
-        img_list = []
-        for i in range(latent_size):
-            img_list.append(imgData[:, :, i])
-        plt.figure(figsize=(10, 10))
-        for i in range(latent_size):
-            plt.subplot(4, 4, i+1)
-            plt.imshow(img_list[i], interpolation="none")
-            plt.title("dim" + str(i+1))
-            plt.axis("off")
-            plt.colorbar()
-        plt.savefig("worm_encoding.png")
+    x_size = (np.max(xpos) + 1).astype(int)
+    y_size = (np.max(ypos) + 1).astype(int)
+    print(f"x_size: {x_size}, y_size: {y_size}")
+    imgData = np.zeros((1, x_size, y_size, latent_size))
+
+    print("creating encoded image...")
+    encoded = torch.zeros(pixel_count, latent_size)
+    for i in range(0, pixel_count):
+        batch = torch.from_numpy(data[i, :]).to(device)
+        batch = F.pad(batch, (0, (padded_count-intensity_count)), "constant", 0)
+        batch = torch.unsqueeze(torch.unsqueeze(batch, 0), 0)
+        with torch.no_grad():
+            encoded = model.module.encode(batch).cpu().numpy()
+        imgData[0, xpos[i], ypos[i], :] = encoded
     
+    im = sitk.GetImageFromArray(imgData)
+    sitk.WriteImage(im, "worm.nrrd")
+
+    imgData = np.squeeze(imgData, 0)
+    img_list = []
+    for i in range(latent_size):
+        img_list.append(imgData[:, :, i])
+    plt.figure(figsize=(17, 17))
+    for i in range(latent_size):
+        plt.subplot(4, 4, i+1)
+        plt.imshow(img_list[i], interpolation="none")
+        plt.title("dim" + str(i+1))
+        plt.axis("off")
+        plt.colorbar()
+    plt.savefig("worm_encoding.png")
+
+    end = time.time()
+    print(f"execution time: {(end - start)/60} minutes")

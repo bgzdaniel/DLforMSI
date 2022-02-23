@@ -7,6 +7,7 @@ from torch import nn
 from torch import optim
 from pathlib import Path
 import torch.nn.functional as F
+import time
 
 latent_size = 16
 
@@ -96,16 +97,18 @@ def load_data():
     f =  h5py.File("../training_data/msiPL_Dataset/Prostate/P_1900.h5", "r")
     print(f.keys())
     data = np.transpose(np.array(f["Data"][:])).astype(np.float32)
-    data_mean = np.mean(data, 0)
-    data_std = np.std(data, 0)
-    data -= data_mean
-    data /= (data_std + 1e-10)
+    tic = np.sum(data, 1)
+    tic /= 1e4
+    mean = np.mean(data, 1)
+    data -= mean[:, None]
+    data /= tic[:, None]
     mz_array = np.array(f["mzArray"][:]).astype(np.float32)
     xpos = np.array(f["xLocation"][:]).astype(np.float32)
     ypos = np.array(f["yLocation"][:]).astype(np.float32)
     return data, mz_array, xpos.astype(int), ypos.astype(int)
 
 if __name__ == '__main__':
+    start = time.time()
     data, mz_array, xpos, ypos = load_data()
     print(f"data shape: {data.shape}")
     intensity_count = data.shape[1]
@@ -114,7 +117,7 @@ if __name__ == '__main__':
 
     model, optimizer, loss_function, device = init_model(padded_count)
     total_loss = []
-    iterations = 1000
+    iterations = 40000
     batch_size = 32
     for i in range(iterations):
         idx = np.random.randint(pixel_count, size=(batch_size))
@@ -127,13 +130,15 @@ if __name__ == '__main__':
         total_loss.append(loss.item())
 
         if i % (iterations//10) == 0:
-            print(f"{i:6d}: loss: {loss.item():3.6f}")
+            print(f"{i:6d}: loss: {loss.item():3.10f}")
 
     print("saving model params...")
     torch.save(model.state_dict(), "model_params.pt")
 
     plt.figure(1)
     plt.plot(np.convolve(total_loss, np.full((10), 0.1), mode="valid"))
+    plt.xlabel("iteration")
+    plt.ylabel("loss")
     plt.savefig("prostate_loss.png")
 
     x_size = (np.max(xpos) + 1).astype(int)
@@ -166,3 +171,6 @@ if __name__ == '__main__':
         plt.axis("off")
         plt.colorbar()
     plt.savefig("prostate_encoding.png")
+
+    end = time.time()
+    print(f"execution time: {(end - start)/60} minutes")

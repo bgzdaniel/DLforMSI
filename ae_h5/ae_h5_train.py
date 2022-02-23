@@ -6,54 +6,56 @@ import torch
 from torch import nn
 from torch import optim
 from pathlib import Path
+import time
 
-latent_size = 5
+latent_size = 16
 
 # model definition
 class AE(nn.Module):
     def __init__(self, intensity_count):
         super(AE, self).__init__()
 
-        self.activation = nn.ReLU()
+        # self.activation = nn.ReLU()
+        # self.end_activation = nn.Sigmoid()
 
-        self.enc1_bn = nn.BatchNorm1d(512)
-        self.enc1 = nn.Linear(intensity_count, 512)
-        self.enc2_bn = nn.BatchNorm1d(5)
-        self.enc2 = nn.Linear(512, 5)
+        # self.enc1_bn = nn.BatchNorm1d(512)
+        # self.enc1 = nn.Linear(intensity_count, 512)
+        # self.enc2_bn = nn.BatchNorm1d(5)
+        # self.enc2 = nn.Linear(512, 5)
 
-        self.dec1_bn = nn.BatchNorm1d(512)
-        self.dec1 = nn.Linear(5, 512)
-        self.dec2_bn = nn.BatchNorm1d(intensity_count)
-        self.dec2 = nn.Linear(512, intensity_count)
+        # self.dec1_bn = nn.BatchNorm1d(512)
+        # self.dec1 = nn.Linear(5, 512)
+        # self.dec2_bn = nn.BatchNorm1d(intensity_count)
+        # self.dec2 = nn.Linear(512, intensity_count)
 
-        # self.activation = nn.Tanh()
+        self.activation = nn.Tanh()
 
-        # self.enc1 = nn.Linear(intensity_count, intensity_count//16)
-        # self.enc2 = nn.Linear(intensity_count//16, intensity_count//256)
-        # self.enc3 = nn.Linear(intensity_count//256, latent_size)
+        self.enc1 = nn.Linear(intensity_count, intensity_count//32)
+        self.enc2 = nn.Linear(intensity_count//32, intensity_count//128)
+        self.enc3 = nn.Linear(intensity_count//128, latent_size)
 
-        # self.dec1 = nn.Linear(latent_size, intensity_count//256)
-        # self.dec2 = nn.Linear(intensity_count//256, intensity_count//16)
-        # self.dec3 = nn.Linear(intensity_count//16, intensity_count)
+        self.dec1 = nn.Linear(latent_size, intensity_count//128)
+        self.dec2 = nn.Linear(intensity_count//128, intensity_count//32)
+        self.dec3 = nn.Linear(intensity_count//32, intensity_count)
         
 
     def encode(self, x):
-        x = self.activation(self.enc1_bn(self.enc1(x)))
-        x = self.activation(self.enc2_bn(self.enc2(x)))
+        # x = self.activation(self.enc1_bn(self.enc1(x)))
+        # x = self.activation(self.enc2_bn(self.enc2(x)))
 
-        # x = self.activation(self.enc1(x))
-        # x = self.activation(self.enc2(x))
-        # x = self.enc3(x)
+        x = self.activation(self.enc1(x))
+        x = self.activation(self.enc2(x))
+        x = self.activation(self.enc3(x))
 
         return x
 
     def decode(self, x):
-        x = self.activation(self.dec1_bn(self.dec1(x)))
-        x = self.activation(self.dec2_bn(self.dec2(x)))
+        # x = self.activation(self.dec1_bn(self.dec1(x)))
+        # x = self.activation(self.dec2_bn(self.dec2(x)))
 
-        # x = self.activation(self.dec1(x))
-        # x = self.activation(self.dec2(x))
-        # x = self.dec3(x)
+        x = self.activation(self.dec1(x))
+        x = self.activation(self.dec2(x))
+        x = self.dec3(x)
 
         return x
 
@@ -98,16 +100,19 @@ def load_data():
     f =  h5py.File("../training_data/msiPL_Dataset/Prostate/P_1900.h5", "r")
     print(f.keys())
     data = np.transpose(np.array(f["Data"][:])).astype(np.float32)
-    data_mean = np.mean(data, 0)
-    data_std = np.std(data, 0)
-    data -= data_mean
-    data /= (data_std + 1e-10)
+    tic = np.sum(data, 1)
+    tic /= 1e3
+    # mean = np.mean(data, 1)
+    # data -= mean[:, None]
+    data /= tic[:, None]
     mz_array = np.array(f["mzArray"][:]).astype(np.float32)
     xpos = np.array(f["xLocation"][:]).astype(np.float32)
     ypos = np.array(f["yLocation"][:]).astype(np.float32)
     return data, mz_array, xpos.astype(int), ypos.astype(int)
 
 if __name__ == '__main__':
+    start = time.time()
+
     data, mz_array, xpos, ypos = load_data()
     print(f"data shape: {data.shape}")
     intensity_count = data.shape[1]
@@ -115,7 +120,7 @@ if __name__ == '__main__':
 
     model, optimizer, loss_function, device = init_model(intensity_count)
     total_loss = []
-    iterations = 750
+    iterations = 10000
     batch_size = 32
     for i in range(iterations):
         idx = np.random.randint(pixel_count, size=(batch_size))
@@ -126,13 +131,15 @@ if __name__ == '__main__':
         total_loss.append(loss.item())
 
         if i % (iterations//10) == 0:
-            print(f"{i:6d}: loss: {loss.item():3.4f}")
+            print(f"{i:6d}: loss: {loss.item():3.8f}")
 
     print("saving model params...")
     torch.save(model.state_dict(), "model_params.pt")
 
     plt.figure(1)
-    plt.plot(np.convolve(total_loss, np.full((10), 0.1), mode="valid"))
+    plt.plot(np.convolve(total_loss[1000:], np.full((10), 0.1), mode="valid"))
+    plt.xlabel("iteration")
+    plt.ylabel("loss")
     plt.savefig("prostate_loss.png")
 
     x_size = (np.max(xpos) + 1).astype(int)
@@ -154,9 +161,9 @@ if __name__ == '__main__':
     for i in range(latent_size):
         img_list.append(imgData[:, :, i])
     if(latent_size == 5):
-        plt.figure(figsize=(20, 4))
+        plt.figure(figsize=(5, 10))
         for i in range(latent_size):
-            plt.subplot(1, latent_size, i+1)
+            plt.subplot(3, 2, i+1)
             plt.imshow(img_list[i], interpolation="none")
             plt.title("dim" + str(i+1))
             plt.axis("off")
@@ -171,4 +178,7 @@ if __name__ == '__main__':
             plt.axis("off")
             plt.colorbar()
         plt.savefig("prostate_encoding.png")
+
+    end = time.time()
+    print(f"execution time: {(end - start)/60} minutes")
 
